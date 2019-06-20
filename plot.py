@@ -65,10 +65,13 @@ def filter_data(data, min_lap_time = 5.0, max_lap_time=60.0, pilot=None):
    return data
 
 
-def plot(data, statistics, bounds, bin_width=1.0, max_lap_time=60.0):
+def plot(chart_path, data, statistics, bounds, bin_width=1.0, max_lap_time=60.0):
    hist_data = []
    names = []
-   fig, axs = plt.subplots(len(data), 2, squeeze=False)
+   fig, axs = plt.subplots(len(data), 2, squeeze=False, figsize=(16, 12))
+   
+   #fig.set_size_inches(10, 16)
+   
    plot = 0
    colors = ['blue', 'red', 'green', 'yellow', 'purple']
    ymax = [0, 0]
@@ -114,12 +117,16 @@ def plot(data, statistics, bounds, bin_width=1.0, max_lap_time=60.0):
       a[1].set_ylim([ymin[1] - 1, ymax[1] + 1])
 
    plt.tight_layout()
-   plt.show()
+   if chart_path:
+      plt.savefig(chart_path, format='png', dpi=200)
+   else: 
+      plt.show()
 
 
 def main():
    parser = argparse.ArgumentParser()
    parser.add_argument('--csv')
+   parser.add_argument('--chart')
    parser.add_argument('--hist-left-bound', type=float, required=True)
    parser.add_argument('--hist-right-bound', type=float, required=True)
    parser.add_argument('--only-pilot')
@@ -129,7 +136,7 @@ def main():
    filtered_data = filter_data(data, pilot=args.only_pilot)
    statistics = calculate_statistics(filtered_data)
    hist_bounds = [args.hist_left_bound, args.hist_right_bound]
-   plot(filtered_data, statistics, bounds=hist_bounds)
+   plot(args.chart, filtered_data, statistics, bounds=hist_bounds)
 
 
 if __name__ == "__main__":
