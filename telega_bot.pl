@@ -24,6 +24,9 @@ my $CSV_FLD    = './race_csv';
 
 my $luid = './last_update_id';
 
+my $left_bound  = 10;
+my $right_bound = 40;
+
 #########################################################################################
 
 run();
@@ -47,17 +50,17 @@ sub run {
 			my $chat_id = $msg->{message}->{chat}->{id};
 			my $message_id = $msg->{message}->{message_id};
 			
-			$last_update_id = $msg->{update_id};
+			$last_update_id = $msg->{update_id} + 1;
 			
 			next if -f $CHARTS_FLD.'/race_charts_'.$message_id.'.png';
 			
-			if (my $doc = $msg->{message}->{document}){
+			if (my $doc = $msg->{message}->{document} || $msg->{message}->{reply_to_message}->{document}){
 				
 				if ($doc->{file_name} && $doc->{file_name} =~ /race_/i && $doc->{file_name} =~ /\.csv/i){
 					
 					say $doc->{file_name};
 					
-					get_file($doc->{file_id}, $message_id); 
+					my $file_name = get_file($doc->{file_id}, $message_id); 
 					
 					say 'Make Charts...';
 						
@@ -65,10 +68,16 @@ sub run {
 						
 					say 'Send Charts to chat '.$chat_id.'...';
 					
-					send_charts($message_id, $chat_id);
+					send_charts($message_id, $chat_id, $file_name);
 						
 				} 
 				
+			}
+			
+			if (my $text = $msg->{message}->{text}){
+				if ($text =~ /help/i){
+					send_notify($chat_id, 'Я тут :) Присылай ответом или мне лично, race.csv файл, обработаю.')
+				}
 			}
 						
 		}
@@ -105,7 +114,7 @@ sub make_charts {
 	
 	#python3 plot.py --hist-left-bound 12.0 --hist-right-bound 28 --csv ./race_20190618_010439.csv --only-pilot 'FSN'
 	
-	my $cmd = '/usr/bin/python3 plot.py --hist-left-bound 12.0 --hist-right-bound 28 --csv '.$csv_file.' --chart '.$chart_file.'';
+	my $cmd = '/usr/bin/python3 plot.py --hist-left-bound '.$left_bound.' --hist-right-bound '.$right_bound.' --csv '.$csv_file.' --chart '.$chart_file.'';
 	
 	say $cmd;
 	
@@ -117,12 +126,13 @@ sub make_charts {
 sub send_charts {
 	my $message_id = shift || die 'Nead message_id!!!';
 	my $chat_id    = shift || die 'Nead chat_id!!!';
+	my $file_name  = shift || 'race_data.csv';
 	
 	my $chart_file = $CHARTS_FLD.'/race_charts_'.$message_id.'.png';
 	
 	if (-e $chart_file){
 	
-		my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_file.'"';
+		my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_file.'" -F caption="'.$file_name.'"';
 		
 		say $api_link;
 			
@@ -160,7 +170,7 @@ sub get_file {
 		
 		my $res = `$get_file_link`;
 		
-		return 1;
+		return $file->{file_name};
 		
 	} 
 	
@@ -173,11 +183,11 @@ sub get_file {
 sub get_messages {
 	my $last_update_id = shift;
 	
-	say 'Get Messages...';
+	#say 'Get Messages...';
 	
 	my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/getUpdates -d offset='.$last_update_id.'';
 	
-	say $api_link;
+	#say $api_link;
 	
 	my $res = `$api_link`;
 	
