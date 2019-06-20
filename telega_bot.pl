@@ -28,8 +28,6 @@ my $luid = './last_update_id';
 
 run();
 
-#send_charts(327076764,);
-
 exit;
 
 #########################################################################################
@@ -107,12 +105,13 @@ sub make_charts {
 	
 	#python3 plot.py --hist-left-bound 12.0 --hist-right-bound 28 --csv ./race_20190618_010439.csv --only-pilot 'FSN'
 	
-	my $cmd = 'python3 plot.py --hist-left-bound 12.0 --hist-right-bound 28 --csv '.$csv_file.' --chart '.$chart_file.'';
+	my $cmd = '/usr/bin/python3 plot.py --hist-left-bound 12.0 --hist-right-bound 28 --csv '.$csv_file.' --chart '.$chart_file.'';
 	
 	say $cmd;
 	
-	`$cmd`;
+	my $res = `$cmd`;
 	
+	say $res;
 }
 
 sub send_charts {
@@ -121,13 +120,21 @@ sub send_charts {
 	
 	my $chart_file = $CHARTS_FLD.'/race_charts_'.$message_id.'.png';
 	
-	my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_file.'"';
+	if (-e $chart_file){
 	
-	say $api_link;
+		my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_file.'"';
 		
-	my $res = `$api_link`;
+		say $api_link;
+			
+		my $res = `$api_link`;
+		
+		say $res;
 	
-	#say $res;
+	} else {
+		
+		say 'File not find! - '.$chart_file;
+		
+	}
 	
 }
 
