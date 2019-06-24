@@ -23,9 +23,10 @@ my $CHARTS_FLD = './charts';
 my $CSV_FLD    = './race_csv';
 
 my $luid = './last_update_id';
+my $gist_range = './gist_range';
 
-my $left_bound  = 10;
-my $right_bound = 40;
+my ($left_bound, $right_bound) = get_gist_range();
+
 
 #########################################################################################
 
@@ -58,9 +59,11 @@ sub run {
 				
 				if ($doc->{file_name} && $doc->{file_name} =~ /race_/i && $doc->{file_name} =~ /\.csv/i){
 					
-					say $doc->{file_name};
+					my $file_name = $doc->{file_name};
 					
-					my $file_name = get_file($doc->{file_id}, $message_id); 
+					say $file_name;
+					
+					get_file($doc->{file_id}, $message_id); 
 					
 					say 'Make Charts...';
 						
@@ -75,9 +78,22 @@ sub run {
 			}
 			
 			if (my $text = $msg->{message}->{text}){
+
 				if ($text =~ /help/i){
-					send_notify($chat_id, 'Я тут :) Присылай ответом или мне лично, race.csv файл, обработаю.')
+					send_notify($chat_id, 'Привет! Готов обработать твой race.csv файл, от Chorus-RF-Laptimer. Присылай его, ответом на это сообщение или мне лично, вышлю результат.');
+					send_notify($chat_id, '/getrange - Посмотреть диапазон гистограммы. Текущие значения: '.$left_bound.' - '.$right_bound);
+					send_notify($chat_id, '/setrange 10 40 - Задать диапазон гистограммы, где 10 40 начальное и конечное значения, диапазона гистограммы.');
 				}
+
+				if ($text =~ /getrange/i){
+					send_notify($chat_id, 'Текущий диапазон: с '.$left_bound.' по '.$right_bound.' секунду.' );
+				}
+				
+				if ($text =~ /setrange\D+(\d+)\D+(\d+)/i){
+					set_gist_range($1,$2);
+					send_notify($chat_id, 'Новый диапазон: с '.$left_bound.' по '.$right_bound.' секунду.' );
+				}
+				
 			}
 						
 		}
@@ -86,6 +102,30 @@ sub run {
 		
 	}
 
+}
+
+sub get_gist_range {
+
+	if (-f $gist_range){
+		
+		my $range = `cat $gist_range`;
+		
+		if ($range =~ m/(\d{2})\D+(\d{2})/){
+			
+			#say 'Gist range: '.$1.' - '.$2;
+			
+			return ($1, $2);
+		}
+		
+	}
+
+	return (10, 40);
+}
+
+sub set_gist_range {
+	($left_bound, $right_bound) = @_;
+	
+	`echo '$left_bound $right_bound' > $gist_range`;
 }
 
 sub get_last_update_id {
@@ -170,7 +210,7 @@ sub get_file {
 		
 		my $res = `$get_file_link`;
 		
-		return $file->{file_name};
+		return 1;
 		
 	} 
 	
@@ -197,6 +237,8 @@ sub get_messages {
 	
 	if ($data->{result}){
 		return $data->{result};
+	} else {
+		say $res;
 	}
 	
 	return undef;
@@ -207,19 +249,12 @@ sub send_notify {
 	my $chat_id = shift || '-341392670';
 	my $text = shift || return undef;
 
-	
-	
-	if ($TELEGA_ON){
-		
+	#if ($TELEGA_ON){
 		my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendMessage -d chat_id='.$chat_id.' -d text="'.$text.'"';
-		
 		`$api_link`;
-		
-	} else {
-		
-		say $text;
-		
-	}
+	#} else {
+		say 'To chat:'.$chat_id.' -> '.$text;
+	#}
 		
 }
 
