@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 
+#	Телеграмм робот обработки статистики по вылетам на основании CSV файла от программы Chorus-RF-Laptimer
+#	Робот читает сообщения и при наличии в них прикрепленного документа в формате race_YYYYMMDD_XXXXXX.csv, 
+#	скачивает его, прогоняет через скрипт plot.py и отправляет результат ответом.  
+
 use strict;
 use warnings;
 no warnings 'utf8';
@@ -16,15 +20,22 @@ my $UA = LWP::UserAgent->new;
 #########################################################################################
 #########################################################################################
 
-my $TELEGA_ON = 1;
+# Идентификатор робота
 my $TOKEN   = '672698833:AAEHNVa32h9C1qNULClcO2npcARYW8tJTR8';
 
+# Путь к каталогу где будут храниться графики
 my $CHARTS_FLD = './charts';
+
+# Путь к каталоху для загрузки CSV файлов
 my $CSV_FLD    = './race_csv';
 
+# Путь к файлу в котором хранится идентификатор последнего считанного сообщения
 my $luid = './last_update_id';
+
+# Путь к файлу в котором хранится настройка диапазона гистограммы
 my $gist_range = './gist_range';
 
+# Загружаем текущие значения диапазона гистограммы
 my ($left_bound, $right_bound) = get_gist_range();
 
 
@@ -45,8 +56,6 @@ sub run {
 	if ($mesages && ref($mesages) eq 'ARRAY') {
 		
 		foreach my $msg (@$mesages){
-			
-			#warn Dumper $msg;
 			
 			my $chat_id = $msg->{message}->{chat}->{id};
 			my $message_id = $msg->{message}->{message_id};
@@ -111,8 +120,6 @@ sub get_gist_range {
 		my $range = `cat $gist_range`;
 		
 		if ($range =~ m/(\d{2})\D+(\d{2})/){
-			
-			#say 'Gist range: '.$1.' - '.$2;
 			
 			return ($1, $2);
 		}
@@ -200,8 +207,6 @@ sub get_file {
 	
 	my $data = JSON::XS->new->utf8->decode( $res );
 	
-	#die Dumper $data;
-		
 	if (my $file = $data->{result}){
 		
 		my $get_file_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -o "'.$CSV_FLD.'/race_data_'.$message_id.'.csv" https://api.telegram.org/file/bot'.$TOKEN.'/'.$file->{file_path}.'';
@@ -249,12 +254,11 @@ sub send_notify {
 	my $chat_id = shift || '-341392670';
 	my $text = shift || return undef;
 
-	#if ($TELEGA_ON){
-		my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendMessage -d chat_id='.$chat_id.' -d text="'.$text.'"';
-		`$api_link`;
-	#} else {
-		say 'To chat:'.$chat_id.' -> '.$text;
-	#}
+	my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendMessage -d chat_id='.$chat_id.' -d text="'.$text.'"';
+	`$api_link`;
+
+	say 'To chat:'.$chat_id.' -> '.$text;
+
 		
 }
 
