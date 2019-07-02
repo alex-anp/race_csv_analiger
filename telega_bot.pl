@@ -190,6 +190,7 @@ sub send_charts {
 	} else {
 		
 		say 'File not find! - '.$chart_file;
+		send_notify($chat_id, 'Не удалось сформировать графики по данным из файла '.$file_name.' :( Вероятние всего, в нем недостаточно статистики.');
 		
 	}
 	
