@@ -41,7 +41,7 @@ my ($left_bound, $right_bound) = get_gist_range();
 
 #########################################################################################
 
-run();
+while (1) { run(); }
 
 exit;
 
@@ -100,6 +100,7 @@ sub run {
 				
 				if ($text =~ /setrange\D+(\d+)\D+(\d+)/i){
 					set_gist_range($1,$2);
+					($left_bound, $right_bound) = get_gist_range();
 					send_notify($chat_id, 'Новый диапазон: с '.$left_bound.' по '.$right_bound.' секунду.' );
 				}
 				
@@ -119,11 +120,14 @@ sub get_gist_range {
 		
 		my $range = `cat $gist_range`;
 		
-		if ($range =~ m/(\d{2})\D+(\d{2})/){
-			
+		if ($range =~ m/(\d+)\D+(\d+)/){
 			return ($1, $2);
+		} else {
+			warn 'Wrong range -> "'.$range.'"';	
 		}
 		
+	} else {
+		warn "File $gist_range not find!";
 	}
 
 	return (10, 40);
@@ -132,7 +136,11 @@ sub get_gist_range {
 sub set_gist_range {
 	($left_bound, $right_bound) = @_;
 	
-	`echo '$left_bound $right_bound' > $gist_range`;
+	my $cmd = "echo '$left_bound $right_bound' > $gist_range";
+	
+	#warn $cmd;
+	
+	`$cmd`;
 }
 
 sub get_last_update_id {
@@ -231,7 +239,7 @@ sub get_messages {
 	
 	#say 'Get Messages...';
 	
-	my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/getUpdates -d offset='.$last_update_id.'';
+	my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/getUpdates -d timeout=300 -d offset='.$last_update_id.'';
 	
 	#say $api_link;
 	

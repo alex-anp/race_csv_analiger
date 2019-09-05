@@ -17,12 +17,14 @@ def read_data(csv_path):
    with open(csv_path, newline='') as csv_file:
       csv_reader = csv.DictReader(csv_file)
       for row in csv_reader:
-         pilot = row['PILOT']
+         pilot = row['CHANNEL']
          lap_time = datetime.datetime.strptime(row['TIME'], '%M:%S.%f').time()
          lap_time_ms = ((lap_time.hour * 60 + lap_time.minute) * 60 + lap_time.second) * 1000 + int(lap_time.microsecond / 1000)
          data.setdefault(pilot, {}).setdefault('Laps', []).append(lap_time)
          data[pilot].setdefault('LapMs', []).append(lap_time_ms)
          data[pilot].setdefault('LapS', []).append(lap_time_ms/1000)
+         #data[pilot].setdefault('Title', '')
+         data[pilot]['Title'] = "%s (%s)" % (row['PILOT'], row['CHANNEL'])
 
    return data
 
@@ -64,7 +66,7 @@ def filter_data(data, min_lap_time = 5.0, max_lap_time=60.0, pilot=None):
    for pilot, pilot_data in data.items():
       laps = np.array(pilot_data['LapS'])
       pilot_data['Filtered'] = np.logical_and(laps >= min_lap_time, laps <= max_lap_time)
-      print(pilot_data['Filtered'])
+      #print(pilot_data['Filtered'])
 
    return data
 
@@ -81,8 +83,11 @@ def plot(chart_path, data, statistics, bounds, bin_width=1.0, max_lap_time=60.0)
    ymax = [0, 0]
    ymin = [0, 999999999]
    xmax = 0
-   for pilot, pilot_data in data.items():
-      print(pilot_data['Best3'])
+   #for pilot, pilot_data in data.items():
+   for pilot in sorted(data.keys()):
+      pilot_data = data[pilot]
+      
+      #print(pilot_data['Best3'])
 
       n, bins, pathces = axs[plot, 0].hist(
          [pilot_data['LapS'], np.array(pilot_data['Best3']) / 3.0],
@@ -92,7 +97,7 @@ def plot(chart_path, data, statistics, bounds, bin_width=1.0, max_lap_time=60.0)
          label=['1lap', '3lap average']
       )
       ymax[0] = max(ymax[0], np.max(n))
-      axs[plot, 0].set_title(pilot)
+      axs[plot, 0].set_title(pilot_data['Title'])
       axs[plot, 0].grid(True, which='both')
       axs[plot, 0].set_xticks(range(int(bounds[0]), int(bounds[1]), 2))
       axs[plot, 0].set_xlim([bounds[0] - 1, bounds[1] + 1])
@@ -103,7 +108,7 @@ def plot(chart_path, data, statistics, bounds, bin_width=1.0, max_lap_time=60.0)
       xmax = max(xmax, len(pilot_data['MinTime']))
       min3_average = np.array(pilot_data['Min3Time']) / 3.0
       ymax[1] = max(ymax[1], max(pilot_data['MinTime']), max(min3_average))
-      ymin[1] = min(ymin[1], min(pilot_data['MinTime']), max(min3_average))
+      ymin[1] = min(ymin[1], min(pilot_data['MinTime']), min(min3_average))
       axs[plot, 1].plot(range(1, len(pilot_data['MinTime']) + 1), pilot_data['MinTime'], label='min_time')
       axs[plot, 1].plot(pilot_data['Min3Lap'], min3_average, label='min3_average')
       axs[plot, 1].grid(True, which='both')
@@ -114,7 +119,7 @@ def plot(chart_path, data, statistics, bounds, bin_width=1.0, max_lap_time=60.0)
       axs[plot, 1].legend()
       plot += 1
 
-   print(ymax)
+   #print(ymax)
    for a in axs:
       a[0].set_ylim([0, ymax[0]])
       a[1].set_xlim([0, xmax])
