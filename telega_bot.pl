@@ -17,11 +17,14 @@ use XML::Simple;
 
 my $UA = LWP::UserAgent->new;
 
+my $BOT_ON = 1; # Для удаленного управления роботом
+
 #########################################################################################
 #########################################################################################
 
 # Идентификатор робота
-my $TOKEN   = '672698833:AAEHNVa32h9C1qNULClcO2npcARYW8tJTR8';
+my $TOKEN;
+my $token_file = './token';
 
 # Путь к каталогу где будут храниться графики
 my $CHARTS_FLD = './charts';
@@ -41,7 +44,9 @@ my ($left_bound, $right_bound) = get_gist_range();
 
 #########################################################################################
 
-while (1) { run(); }
+set_token();
+
+while ($BOT_ON) { run(); }
 
 exit;
 
@@ -104,6 +109,11 @@ sub run {
 					send_notify($chat_id, 'Новый диапазон: с '.$left_bound.' по '.$right_bound.' секунду.' );
 				}
 				
+				if ($text =~ m/\/reboot/){
+					send_notify($chat_id, 'Пошел на перезагрузку...');
+					$BOT_ON = 0;
+				}
+				
 			}
 						
 		}
@@ -149,6 +159,17 @@ sub get_last_update_id {
 		return `cat $luid`;
 	} else {
 		return 0;
+	}
+	
+}
+
+sub set_token {
+
+	if (-f $luid){
+		$TOKEN = `cat $token_file`;
+		chomp $TOKEN;
+	} else {
+		die 'ERROR: Invalid Token file ('.$token_file.')';
 	}
 	
 }
