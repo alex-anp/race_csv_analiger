@@ -22,6 +22,9 @@ my $BOT_ON = 1; # Для удаленного управления робото�
 #########################################################################################
 #########################################################################################
 
+# Версия анализатора
+my $VER = 'v2';
+
 # Идентификатор робота
 my $TOKEN;
 my $token_file = './token';
@@ -79,13 +82,19 @@ sub run {
 					
 					get_file($doc->{file_id}, $message_id); 
 					
-					say 'Make Charts...';
-						
-					make_charts($message_id);
-						
-					say 'Send Charts to chat '.$chat_id.'...';
-					
-					send_charts($message_id, $chat_id, $file_name);
+					if ($VER eq 'v1'){
+						say 'Make Charts...';
+						make_charts($message_id);
+
+						say 'Send Charts to chat '.$chat_id.'...';
+						send_charts($message_id, $chat_id, $file_name);
+					} else {
+						say 'Make Charts v2...';
+						make_charts_v2($message_id);
+
+						say 'Send Charts v2 to chat '.$chat_id.'...';
+						send_charts_v2($message_id, $chat_id, $file_name);
+					}
 						
 				} 
 				
@@ -199,6 +208,22 @@ sub make_charts {
 	say $res;
 }
 
+sub make_charts_v2 {
+	my $message_id = shift || die 'Nead message_id!!!';
+	
+	my $csv_file = $CSV_FLD.'/race_data_'.$message_id.'.csv';
+	
+	my $chart_dir = $CHARTS_FLD.'/race_charts_'.$message_id;
+	
+	my $cmd = '/usr/bin/python3 plot_v2.py --hist-left-bound '.$left_bound.' --hist-right-bound '.$right_bound.' --csv '.$csv_file.' --chart-dir '.$chart_dir.'';
+	
+	say $cmd;
+	
+	my $res = `$cmd`;
+	
+	say $res;
+}
+
 sub send_charts {
 	my $message_id = shift || die 'Nead message_id!!!';
 	my $chat_id    = shift || die 'Nead chat_id!!!';
@@ -219,6 +244,42 @@ sub send_charts {
 	} else {
 		
 		say 'File not find! - '.$chart_file;
+		send_notify($chat_id, 'Не удалось сформировать графики по данным из файла '.$file_name.' :( Вероятние всего, в нем недостаточно статистики.');
+		
+	}
+	
+}
+
+sub send_charts_v2 {
+	my $message_id = shift || die 'Nead message_id!!!';
+	my $chat_id    = shift || die 'Nead chat_id!!!';
+	my $file_name  = shift || 'race_data.csv';
+	
+	my $chart_dir = $CHARTS_FLD.'/race_charts_'.$message_id;
+	
+	if (-d $chart_dir){
+		
+		my @chart_list = split /\s+/, `ls $chart_dir`;
+		
+		foreach my $chart_file (@chart_list){
+			
+			next if $chart_file =~ m/^\./;
+			
+			my $chart_path = $chart_dir.'/'.$chart_file; 
+			
+			my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_path.'" -F caption="'.$chart_file.' ('.$file_name.')"';
+			
+			say $api_link;
+				
+			my $res = `$api_link`;
+			
+			say $res;
+		
+		}
+	
+	} else {
+		
+		say 'File not find! - '.$chart_dir;
 		send_notify($chat_id, 'Не удалось сформировать графики по данным из файла '.$file_name.' :( Вероятние всего, в нем недостаточно статистики.');
 		
 	}
