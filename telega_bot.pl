@@ -23,17 +23,23 @@ my $BOT_ON = 1; # Для удаленного управления робото�
 #########################################################################################
 
 # Версия анализатора
-my $VER = 'v2';
+my $VER = 'v1 and v2';
 
 # Идентификатор робота
 my $TOKEN;
 my $token_file = './token';
 
+# Параметры для коннекта
+my $PROXY = '--socks5-hostname 127.0.0.1:9050';
+
 # Путь к каталогу где будут храниться графики
 my $CHARTS_FLD = './charts';
 
-# Путь к каталоху для загрузки CSV файлов
+# Путь к каталогу для загрузки CSV файлов
 my $CSV_FLD    = './race_csv';
+
+# Путь к каталогу для статистики
+my $STAT_FLD   = './race_stat';
 
 # Путь к файлу в котором хранится идентификатор последнего считанного сообщения
 my $luid = './last_update_id';
@@ -82,18 +88,29 @@ sub run {
 					
 					get_file($doc->{file_id}, $message_id); 
 					
-					if ($VER eq 'v1'){
+					if ($VER =~ m/v1/){
+
 						say 'Make Charts...';
 						make_charts($message_id);
 
 						say 'Send Charts to chat '.$chat_id.'...';
 						send_charts($message_id, $chat_id, $file_name);
-					} else {
+
+					} 
+					
+					if ($VER =~ m/v2/){
+						
 						say 'Make Charts v2...';
 						make_charts_v2($message_id);
 
 						say 'Send Charts v2 to chat '.$chat_id.'...';
-						send_charts_v2($message_id, $chat_id, $file_name);
+						#send_charts_v2($message_id, $chat_id, $file_name);
+						
+						# Отправляем графиики как альбом изображений
+						send_charts_mg($message_id, $chat_id, $file_name);
+						
+						# Отправляем файл статистики 
+						send_stat_file($message_id, $chat_id, $file_name);
 					}
 						
 				} 
@@ -215,7 +232,14 @@ sub make_charts_v2 {
 	
 	my $chart_dir = $CHARTS_FLD.'/race_charts_'.$message_id;
 	
-	my $cmd = '/usr/bin/python3 plot_v2.py --hist-left-bound '.$left_bound.' --hist-right-bound '.$right_bound.' --csv '.$csv_file.' --chart-dir '.$chart_dir.'';
+	my $cmd = sprintf(
+		'/usr/bin/python3 plot_v2.py --hist-left-bound %s --hist-right-bound %s --csv %s --chart-dir %s > %s',
+			$left_bound,
+			$right_bound,
+			$csv_file,
+			$chart_dir,
+			$STAT_FLD.'/race_stat_'.$message_id.'.txt',
+	);
 	
 	say $cmd;
 	
@@ -233,7 +257,7 @@ sub send_charts {
 	
 	if (-e $chart_file){
 	
-		my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_file.'" -F caption="'.$file_name.'"';
+		my $api_link = 'curl '.$PROXY.' -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_file.'" -F caption="'.$file_name.'"';
 		
 		say $api_link;
 			
@@ -259,15 +283,17 @@ sub send_charts_v2 {
 	
 	if (-d $chart_dir){
 		
+		send_notify($chat_id, 'Новые графики (Еще в разработке)');
+		
 		my @chart_list = split /\s+/, `ls $chart_dir`;
 		
 		foreach my $chart_file (@chart_list){
 			
-			next if $chart_file =~ m/^\./;
+			next unless $chart_file =~ m/\.png$/i;
 			
 			my $chart_path = $chart_dir.'/'.$chart_file; 
 			
-			my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_path.'" -F caption="'.$chart_file.' ('.$file_name.')"';
+			my $api_link = 'curl '.$PROXY.' -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendPhoto -F chat_id="'.$chat_id.'" -F photo="@'.$chart_path.'" -F caption="'.$chart_file.' ('.$file_name.')"';
 			
 			say $api_link;
 				
@@ -286,13 +312,99 @@ sub send_charts_v2 {
 	
 }
 
+sub send_charts_mg {
+	my $message_id = shift || die 'Nead message_id!!!';
+	my $chat_id    = shift || die 'Nead chat_id!!!';
+	my $file_name  = shift || 'race_data.csv';
+	
+	my $chart_dir = $CHARTS_FLD.'/race_charts_'.$message_id;
+	
+	if (-d $chart_dir){
+		
+		send_notify($chat_id, 'Новые графики (Еще в разработке)');
+		
+		my @chart_list = split /\s+/, `ls $chart_dir`;
+		
+		my $media_group = [];
+		my $attaches = '';
+		foreach my $chart_file (@chart_list){
+			
+			next unless $chart_file =~ m/\.png$/i;
+			
+			my $chart_path = $chart_dir.'/'.$chart_file; 
+			
+			$attaches .= sprintf(" -F '%s=@%s'", $chart_file, $chart_path);
+			
+			push  @$media_group, {
+				type => 'photo',
+				media => 'attach://'.$chart_file,
+				caption => $chart_file.' '.$file_name.'',
+			};	
+		
+		}
+	
+		my $media_group_json = JSON::XS->new->utf8->encode( $media_group );
+		
+		my $api_link = sprintf( 
+			"curl %s -k -s -X POST https://api.telegram.org/bot%s/sendMediaGroup -F chat_id=%s -F 'media=%s' %s", 
+				$PROXY,
+				$TOKEN, 
+				$chat_id, 
+				$media_group_json,
+				$attaches,
+		);
+		
+		say $api_link;
+			
+		my $res = `$api_link`;
+		
+		say $res;
+
+	
+	} else {
+		
+		say 'File not find! - '.$chart_dir;
+		send_notify($chat_id, 'Не удалось сформировать графики по данным из файла '.$file_name.' :( Вероятние всего, в нем недостаточно статистики.');
+		
+	}
+	
+}
+
+sub send_stat_file {
+	my $message_id = shift || die 'Nead message_id!!!';
+	my $chat_id    = shift || die 'Nead chat_id!!!';
+	my $file_name  = shift || 'race_data.csv';
+	
+	my $stat_file = $STAT_FLD.'/race_stat_'.$message_id.'.txt';
+	
+	if (-e $stat_file){
+	
+		my $api_link = sprintf(
+			"curl %s -k -s -X POST https://api.telegram.org/bot%s/sendDocument -F chat_id=%s -F 'document=@%s' -F 'caption=%s'",
+				$PROXY,
+				$TOKEN,
+				$chat_id,
+				$stat_file,
+				$file_name
+		);
+		
+		say $api_link;
+			
+		my $res = `$api_link`;
+		
+		say $res;
+	
+	}
+	
+}
+
 sub get_file {
 	my $file_id = shift || return undef;
 	my $message_id = shift;
 	
 	say 'Get File '.$file_id.'...';
 	
-	my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/getFile -d file_id='.$file_id.'';
+	my $api_link = 'curl '.$PROXY.' -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/getFile -d file_id='.$file_id.'';
 	
 	my $res = `$api_link`;
 	
@@ -300,7 +412,7 @@ sub get_file {
 	
 	if (my $file = $data->{result}){
 		
-		my $get_file_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -o "'.$CSV_FLD.'/race_data_'.$message_id.'.csv" https://api.telegram.org/file/bot'.$TOKEN.'/'.$file->{file_path}.'';
+		my $get_file_link = 'curl '.$PROXY.' -k -s -o "'.$CSV_FLD.'/race_data_'.$message_id.'.csv" https://api.telegram.org/file/bot'.$TOKEN.'/'.$file->{file_path}.'';
 		
 		say $get_file_link;
 		
@@ -321,13 +433,11 @@ sub get_messages {
 	
 	#say 'Get Messages...';
 	
-	my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/getUpdates -d timeout=300 -d offset='.$last_update_id.'';
+	my $api_link = 'curl '.$PROXY.' -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/getUpdates -d timeout=300 -d offset='.$last_update_id.'';
 	
 	#say $api_link;
 	
 	my $res = `$api_link`;
-	
-	
 	
 	my $data = JSON::XS->new->utf8->decode( $res );
 	
@@ -345,7 +455,7 @@ sub send_notify {
 	my $chat_id = shift || '-341392670';
 	my $text = shift || return undef;
 
-	my $api_link = 'curl --socks5-hostname 127.0.0.1:9050 -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendMessage -d chat_id='.$chat_id.' -d text="'.$text.'"';
+	my $api_link = 'curl '.$PROXY.' -k -s -X POST https://api.telegram.org/bot'.$TOKEN.'/sendMessage -d chat_id='.$chat_id.' -d text="'.$text.'"';
 	`$api_link`;
 
 	say 'To chat:'.$chat_id.' -> '.$text;
@@ -354,5 +464,3 @@ sub send_notify {
 }
 
 __END__
-
-
